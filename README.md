@@ -13,12 +13,15 @@ you need to download the (soft-masked) sequences, one chromosome per file, one s
 directory. You also need to pre-calculate the length of each chromosome and store this in a text
 file.
 
+Please refer to the PerlDoc of src/OxfordPlots.pm for furhter details on the options.
+
 Full Example
 ============
 
 Organise your input
 -------------------
 
+```
 # Create the input directory (called "genomes" by default)
 
 mkdir genomes
@@ -59,15 +62,18 @@ ls */*.fa |  perl -lne '
  print qx"faToNib $_ $dir/$name.nib"'
 
 cd ..
+```
 
 Configure and run the pipeline
 ------------------------------
 
+```
 export PERL5LIB=${PERL5LIB}:src
 
 init_pipeline.pl src/OxfordPlots.pm --pipeline_url sqlite:///oxford_plot --ref_genome homo_sapiens
 
 beekeeper.pl --url sqlite:///oxford_plot --loop
+```
 
 File organisation
 =================
