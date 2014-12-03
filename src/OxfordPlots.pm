@@ -129,7 +129,16 @@ This is also used as a maximum gap allowed in any chain before splitting it in t
 
 =head2 min_length (def: length_threshold)
 
+Overwrites the minimum length of chain to be considered by chain2rdotplot.pl.
+
 =head2 max_gap (def: length_threshold)
+
+Overwrites the maximum length of a gap allowed in any chain before splitting it in two.
+
+=head2 additional options...
+
+You may want to change some of the command lines for other specific usages. Please refer to the
+documentation of those tools for this.
 
 =head1 REQUIREMENTS
 
@@ -137,7 +146,7 @@ This is also used as a maximum gap allowed in any chain before splitting it in t
 
 =item lastz
 
-Available from the Miller's lab web page: 
+Available from the Miller's lab web page: http://www.bx.psu.edu/miller_lab/dist/README.lastz-1.02.00/README.lastz-1.02.00a.html
 
 =item axtChain
 
@@ -145,7 +154,7 @@ Part of Jim Kent's libraries and tools: git://genome-source.cse.ucsc.edu/kent.gi
 
 =item Rscript
 
-Part of the R package:
+Part of the R package: http://www.r-project.org
 
 =back
 
@@ -389,7 +398,7 @@ sub pipeline_analyses {
         -module         => 'Bio::EnsEMBL::Hive::RunnableDB::SystemCmd',
         -parameters     => {
             'output_dir'    => $self->o('output_dir'),
-            'cmd'           => 'cd #output_dir#; Rscript '.$self->o('work_dir').'/src/oxford_plot.R #output_dir#/#dir1# #input_dir#; cd ..',
+            'cmd'           => 'Rscript '.$self->o('work_dir').'/src/oxford_plot.R --genomes #input_dir# --alignments #output_dir#/#dir1# --pdf #output_dir#/#dir1#.pdf',
         },
     },
     

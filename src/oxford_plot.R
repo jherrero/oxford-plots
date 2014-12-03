@@ -1,47 +1,108 @@
+#!/usr/bin/env Rscript
+
+suppressPackageStartupMessages(library("argparse"))
+
+parser <- ArgumentParser()
+
+parser$add_argument("--genomes", default="genomes/",
+        help="Specifies the directory containing the genome sequences (and the chr lengths)");
+parser$add_argument("--alignments", default="alignments/callithrix_jacchus/",
+        help="Specifies the directory containing the main alignments");
+parser$add_argument("--colour", default="blue",
+        help="Specifies the colour for drawing the main alignments");
+parser$add_argument("--alignments2",
+        help="Specifies the directory containing the main alignments");
+parser$add_argument("--colour2", default="black",
+        help="Specifies the colour for drawing the main alignments");
+parser$add_argument("--pdf",
+        help="Specifies the output filename");
+parser$add_argument("--swap", action="store_true", default=FALSE,
+        help="Swap the species in the plot");
+
+args <- parser$parse_args()
+
+genomes.dir <- args$genomes;
+alignments.dir <- args$alignments;
+user.col <- args$colour;
+alignments.dir2 <- args$alignments2;
+user.col2 <- args$colour2;
+pdf.filename <- args$pdf;
+
 cat("Preparing a new Oxford plot.\n");
-## Reads the argumens and gets the data directory if provided. Uses cwd otherwise.
-args <- commandArgs(trailingOnly=TRUE);
-if (length(args) > 0 ) {
-    data.dir <- args[1];
-} else {
-    data.dir <- ".";
-    data.dir <- "alignments/callithrix_jacchus/"
-}
-cat("Alignment data are in", data.dir,"\n");
+cat("Files with chromosome lengths are in", genomes.dir,"\n");
+cat("Alignment data are in", alignments.dir,"\n");
 
-if (length(args) > 1 ) {
-    input.dir <- args[2];
-} else {
-    input.dir <- "../../genomes/";
-    input.dir <- "genomes/";
+
+## FUNCTION read.chromosome.lengths
+
+read.chromosome.lengths <- function(genomes.dir) {
+    files <- list.files(genomes.dir, ".txt");
+    chr.lengths <- list();
+    for (this.file in files) {
+        these.lengths <- read.table(paste(genomes.dir, this.file, sep="/"), row.names=1);
+        chr.lengths[this.file] = list(these.lengths);
+    }
+    return(chr.lengths);
 }
 
-if (length(args) > 2 ) {
-    user.col <- args[3];
-} else {
-    user.col <- "blue";
-}
-cat("Files with chromosome lengths are in", input.dir,"\n");
 
-if (length(grep("^alignments.\\d+[MK]\\.\\d+[MK]/", data.dir, perl=T)) > 0) {
-    min.length <- data.dir
-    min.length <- sub("alignments.", "", data.dir)
+plot.chains <- function(filename, my.lengths.1, my.length.2, lw, col=red) {
+
+    these.chain.lengths.1 <- c();
+    these.chain.lengths.2 <- c();
+    
+
+    if (!is.na(file.info(filename)$size) & file.info(filename)$size > 0) {
+        # cat(species.1, assembly.1, chr.1, species.2, assembly.2, chr.2, "\n");
+        chains <- read.table(filename, header=T);
+
+        if (dim(chains)[1] > 0) {
+            chains[,1] <- chains[,1] + my.lengths.1[i];
+            chains[,2] <- chains[,2] + my.lengths.2[j];
+            if (args$swap) {
+                chains[,c(1,2)] <- chains[,c(2,1)];
+            }
+            lines(chains, type="l", lw=lw, col=col, cex=0.3);
+    
+            for (c in 1:(dim(chains)[1]/3)) {
+                # cat("c is ", c,"\n")
+                chain.length.1 = abs(chains[(c-1)*3+2,1] - chains[(c-1)*3+1,1]);
+                # cat(chains[(c-1)*3+1,1], chains[(c-1)*3+2,1], chain.length, "\n")
+                these.chain.lengths.1 <- c(these.chain.lengths.1, chain.length.1);
+            }
+    
+            for (c in 1:(dim(chains)[1]/3)) {
+                # cat("c is ", c,"\n")
+                chain.length.2 = abs(chains[(c-1)*3+2,2] - chains[(c-1)*3+1,2]);
+                # cat(chains[(c-1)*3+1,2], chains[(c-1)*3+2,2], chain.length, "\n")
+                these.chain.lengths.2 <- c(these.chain.lengths.2, chain.length.2);
+            }
+        }
+    }
+    return(list(these.chain.lengths.1, these.chain.lengths.2));
+}
+
+
+
+
+
+if (length(grep("^alignments.\\d+[MK]\\.\\d+[MK]/", alignments.dir, perl=T)) > 0) {
+    min.length <- alignments.dir
+    min.length <- sub("alignments.", "", alignments.dir)
     min.length <- sub("/.+", "", min.length)
     max.gap <- min.length
     min.length <- sub("\\..+", "", min.length)
     max.gap <- sub(".+\\.", "", max.gap)
 }
 
-files <- list.files(input.dir, ".txt");
-chr.lengths <- list();
-for (this.file in files) {
-    these.lengths <- read.table(paste(input.dir, this.file, sep="/"), row.names=1);
-    chr.lengths[this.file] = list(these.lengths);
-}
+chr.lengths <- read.chromosome.lengths(genomes.dir);
 
 ## Reads the list of files in this directory. Actually, this is only done to extract some information from the file names.
-# cat("Reading files from ", data.dir);
-files <- list.files(data.dir, ".rdotplot");
+# cat("Reading files from ", alignments.dir);
+files <- list.files(alignments.dir, ".rdotplot");
+if (length(alignments.dir2) != 0) {
+    files <- c(files, list.files(alignments.dir2, ".rdotplot"));
+}
 
 ## Species and assembly names (the species names are used to label the axes)
 species.1 <- sub(".dna_sm.chromosome.+", "", files[1]);
@@ -109,22 +170,36 @@ for (chr.2 in sorted.chromosomes.2) {
 max.y <- tail(my.lengths.2, n=1);
 #cat("max-y is", max.y, "\n");
 
-if (exists("min.length") & exists("max.gap")) {
-    pdf.filename <- paste("new", species.1, min.length, max.gap, "pdf", sep=".");
-} else {
-    pdf.filename <- paste0(species.1, ".pdf");
+if (length(pdf.filename) == 0) {
+    if (exists("min.length") & exists("max.gap")) {
+        pdf.filename <- paste("new", species.1, min.length, max.gap, "pdf", sep=".");
+    } else {
+        pdf.filename <- paste0(species.1, ".pdf");
+    }
 }
 cat("Storing figure in", pdf.filename, "\n");
 pdf(pdf.filename);
 
-plot(NULL, xlim=c(1,max.x), ylim=c(1,max.y), xlab=sub("_", " ", species.1), ylab=sub("_", " ", species.2), xaxt="n", yaxt="n", mgp=c(0.5,0,0), bty="n");
-for (l in my.lengths.2) lines(c(0,max.x), c(l, l), col="grey");
-for (l in my.lengths.1) lines(c(l,l), c(0,max.y), col="grey");
-for (i in 1:length(sorted.chromosomes.1)) {
-    text(sum(my.lengths.1[c(i, i+1)])/2, 1, sorted.chromosomes.1[i], pos=1, cex=0.6)
-}
-for (i in 1:length(sorted.chromosomes.2)) {
-    text(1, sum(my.lengths.2[c(i, i+1)])/2, sorted.chromosomes.2[i], pos=2, cex=0.6)
+if (args$swap) {
+    plot(NULL, xlim=c(1,max.y), ylim=c(1,max.x), xlab=sub("_", " ", species.2), ylab=sub("_", " ", species.1), xaxt="n", yaxt="n", mgp=c(0.5,0,0), bty="n");
+    for (l in my.lengths.1) lines(c(0,max.y), c(l, l), col="grey");
+    for (l in my.lengths.2) lines(c(l,l), c(0,max.x), col="grey");
+    for (i in 1:length(sorted.chromosomes.2)) {
+        text(sum(my.lengths.2[c(i, i+1)])/2, 1, sorted.chromosomes.2[i], pos=1, cex=0.6)
+    }
+    for (i in 1:length(sorted.chromosomes.1)) {
+        text(1, sum(my.lengths.1[c(i, i+1)])/2, sorted.chromosomes.1[i], pos=2, cex=0.6)
+    }
+} else {
+    plot(NULL, xlim=c(1,max.x), ylim=c(1,max.y), xlab=sub("_", " ", species.1), ylab=sub("_", " ", species.2), xaxt="n", yaxt="n", mgp=c(0.5,0,0), bty="n");
+    for (l in my.lengths.2) lines(c(0,max.x), c(l, l), col="grey");
+    for (l in my.lengths.1) lines(c(l,l), c(0,max.y), col="grey");
+    for (i in 1:length(sorted.chromosomes.1)) {
+        text(sum(my.lengths.1[c(i, i+1)])/2, 1, sorted.chromosomes.1[i], pos=1, cex=0.6)
+    }
+    for (i in 1:length(sorted.chromosomes.2)) {
+        text(1, sum(my.lengths.2[c(i, i+1)])/2, sorted.chromosomes.2[i], pos=2, cex=0.6)
+    }
 }
 
 all.chain.lengths.1 <- c();
@@ -143,50 +218,16 @@ for (i in 1:length(sorted.chromosomes.1)) {
         } else {
             filename <- paste(species.1, assembly.1, "dna_sm", "chromosome", chr.1, "fa", "vs", species.2, assembly.2, "dna_sm", "chromosome", chr.2, "fa", "chain", "rdotplot", sep=".");
         }
-        filename <- paste0(data.dir, "/", filename);
         
-        if (!is.na(file.info(filename)$size) & file.info(filename)$size > 0) {
-            # cat(species.1, assembly.1, chr.1, species.2, assembly.2, chr.2, "\n");
-            chains <- read.table(filename, header=T);
-
-            if (dim(chains)[1] > 0) {
-                chains[,1] <- chains[,1] + my.lengths.1[i];
-                chains[,2] <- chains[,2] + my.lengths.2[j];
-                lines(chains, type="l", lw=3, col=user.col, cex=0.3);
-                
-                for (c in 1:(dim(chains)[1]/3)) {
-                    # cat("c is ", c,"\n")
-                    chain.length.1 = abs(chains[(c-1)*3+2,1] - chains[(c-1)*3+1,1]);
-                    # cat(chains[(c-1)*3+1,1], chains[(c-1)*3+2,1], chain.length, "\n")
-                    all.chain.lengths.1 <- c(all.chain.lengths.1, chain.length.1);
-                }
-                
-                for (c in 1:(dim(chains)[1]/3)) {
-                    # cat("c is ", c,"\n")
-                    chain.length.2 = abs(chains[(c-1)*3+2,2] - chains[(c-1)*3+1,2]);
-                    # cat(chains[(c-1)*3+1,2], chains[(c-1)*3+2,2], chain.length, "\n")
-                    all.chain.lengths.2 <- c(all.chain.lengths.2, chain.length.2);
-                }
-            }
-            
+        if (length(alignments.dir2)!=0) {
+            plot.chains(paste0(alignments.dir2, "/", filename), my.lengths.1, my.lengths.2, 2, user.col2);
         }
-        
-#        filename <- paste(species.1, assembly.1, "dna_sm", "chromosome", chr.1, "fa", "vs", species.2, assembly.2, "dna_sm", "chromosome", chr.2, "fa", "rdotplot", sep=".");
-#        filename <- paste0(data.dir, "/", filename);
-#
-#        if (!is.na(file.info(filename)$size) & file.info(filename)$size > 0) {
-#            cat(species.1, assembly.1, chr.1, species.2, assembly.2, chr.2, "\n");
-#            dots <- read.table(filename, header=T);
-#            dots[,1] <- dots[,1] + my.lengths.1[i];
-#            dots[,2] <- dots[,2] + my.lengths.2[j];
-#            lines(dots, type="l", lw=3, col="red");
-#        }
+        these.chain.lengths <- plot.chains(paste0(alignments.dir, "/", filename), my.lengths.1, my.lengths.2, 5, user.col);
+        all.chain.lengths.1 <- c(all.chain.lengths.1, these.chain.lengths[[1]]);
+        all.chain.lengths.2 <- c(all.chain.lengths.2, these.chain.lengths[[2]]);
 
     }
 }
-
-#hist(all.chain.lengths.1, breaks=(0:11)*2e7)
-#hist(all.chain.lengths.2, breaks=(0:11)*2e7)
 
 sum.all.chain.lengths.1 = sum(all.chain.lengths.1, na.rm=T)
 sum.all.chain.lengths.2 = sum(all.chain.lengths.2, na.rm=T)
