@@ -39,7 +39,7 @@ gunzip */*.fa.gz
 # Get the length of the chromosomes:
 
 rm -f *.txt;
-ls -d1 * | while read dir; do perl -lne '\
+ls -d1 * | while read dir; do perl -lne '
   if (/^>(\S+)/) {
     if ($name) {
       print "$name\t$l"
