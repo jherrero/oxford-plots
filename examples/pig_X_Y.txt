@@ -1,0 +1,197 @@
+This file shows the equivalent command lines for the dotplot produced as part of the "The pig X and Y chromosomes" study 
+
+lastz and axtChain are from git://genome-source.cse.ucsc.edu/kent.git (26 Nov 2014; 646cb9f112ae913bbd5fff50346c0d7d50ce013b)
+
+#################################################
+## 1. Obtain the data
+#################################################
+
+mkdir input
+cd input
+
+## Download the data from Ensembl 77:
+
+wget -O - ftp://ftp.ensembl.org/pub/release-77/fasta/ | perl -lne 'if (/href="([^"]+)"/) { system("wget", "$1/dna/\*.dna_sm.chromosome.X.fa.gz") };'
+
+## Remove the ones we do not need:
+rm Drosophila* Caenorhabditis* Saccharomyces*
+
+# gunzip all the files
+gunzip *.fa.gz
+
+## Obtain chrX-17.fa.gz from WTSI Havana team and change its name:
+bunzip2 -c chrX-17.fa.bz2 > Sus_scrofa.Sscrofa17.dna_sm.chromosome.X.fa
+
+cd ..
+
+
+#################################################
+## 2. Organise the data in the genomes folder
+#################################################
+
+mkdir genomes.X
+ls input/*.X.fa | grep -v "Sscrofa10.2" | perl -lpe '$file = $_; s/input\///; s/\..+//; $_ = lc($_); system("mkdir -p genomes.X/$_"); system("ln -s ../../$file genomes.X/$_/")'
+
+
+#################################################
+## 3. Install Kent libs (if not available already)
+#################################################
+bash
+cd
+cd src
+git clone git://genome-source.cse.ucsc.edu/kent.git
+cd kent
+export MACHTYPE=`uname -m`
+cd src/lib/
+make
+cd ../jkOwnLib/
+make
+cd ../utils/faToNib
+make
+cd ../..hg/lib
+make
+cd ../mouseStuff/axtChain/
+make
+cd
+cd bin/
+ln -s $MACHTYPE/* .
+exit
+
+
+#################################################
+## 5. Get the length of the sequences
+#################################################
+
+cd genomes.X
+
+rm -f *.txt;
+
+ls -d1 * | while read dir; do perl -lne '
+  if (/^>(\S+)/) {
+    if ($name) {
+      print "$name\t$l"
+    };
+    $name = $1;
+    $l = 0;
+    next
+  } $l += length($_);
+  END {print "$name\t$l"}
+  ' $dir/*.fa >> $dir.txt; done
+cd ..
+
+
+#################################################
+## 5. Get the sequences in nib format
+#################################################
+# NB: Consider running this with qrsh or any equivalent
+
+cd genomes.X
+
+ls */*.fa |  perl -lne '
+ my $dir = $_;
+ $dir =~ s/\/[^\/]*$//;
+ my $name = qx"head -n 1 $_";
+ $name =~ s/^>(\S+).*/$1/;
+ chomp($name);
+ print qx"faToNib $_ $dir/$name.nib"'
+cd ..
+
+
+#################################################
+## 6. Run the eHive pipeline
+#################################################
+
+mkdir alignments
+
+init_pipeline.pl src/OxfordPlots.pm --pipeline_url mysql://user:pass@host:port/oxford_plot_stringent --ref_genome sus_scrofa \
+ --input_dir $PWD/genomes.X --output_dir $PWD/alignments.X.stringent \
+ --lastz_options "--notransition --step=30 --seed=match12 --exact=50 --matchcount=1000 --masking=3" \
+ --axt_chain_options "-linearGap=loose"
+
+beekeeper.pl -url mysql://user:pass@host:port/oxford_plot_stringent -loop --can_respecialize 1 --sleep 10
+
+init_pipeline.pl src/OxfordPlots.pm --pipeline_url mysql://user:pass@host:port/oxford_plot_normal --ref_genome sus_scrofa \
+ --input_dir $PWD/genomes.X --output_dir $PWD/alignments.X.normal \
+ --lastz_options " " \
+ --axt_chain_options "-linearGap=loose"
+
+beekeeper.pl -url mysql://user:pass@host:port/oxford_plot_normal -loop --can_respecialize 1 --sleep 10
+
+
+#################################################
+## 7. Combine both sets in one plot
+#################################################
+
+ls genomes.X/ | grep -v -e ".txt" -e sus_scrofa | while read spc; do \
+  Rscript src/oxford_plot.R --genomes genomes.X --alignments alignments.X.stringent/$spc --alignments2 alignments.X.normal/$spc --colour2 darkred --swap --pdf $spc.pdf; \
+  done;
+
+
+## ============================================================================
+## Using command lines instead of eHive: For X and Y cross-species alignments
+## ============================================================================
+
+## Blue alignments (stringent settings)
+lastz
+ genomes/homo_sapiens/Homo_sapiens.GRCh38.dna_sm.chromosome.X.fa genomes/sus_scrofa/Sus_scrofa.Sscrofa17.dna_sm.chromosome.X.fa \
+ --notransition --step=30 --seed=match12 --exact=50 --matchcount=1000 --masking=3 --format=axt \
+ --output=alignments.X.stringent/homo_sapiens/Homo_sapiens.GRCh38.dna_sm.chromosome.X.fa.vs.Sus_scrofa.Sscrofa17.dna_sm.chromosome.X.fa.axt \
+ --rdotplot=alignments.X.stringent/homo_sapiens/Homo_sapiens.GRCh38.dna_sm.chromosome.X.fa.vs.Sus_scrofa.Sscrofa17.dna_sm.chromosome.X.fa.rdotplot
+
+axtChain -linearGap=loose \
+ alignments.X.stringent/homo_sapiens/Homo_sapiens.GRCh38.dna_sm.chromosome.X.fa.vs.Sus_scrofa.Sscrofa17.dna_sm.chromosome.X.fa.axt \
+ genomes/homo_sapiens/ genomes/sus_scrofa \
+ alignments.X.stringent/homo_sapiens/Homo_sapiens.GRCh38.dna_sm.chromosome.X.fa.vs.Sus_scrofa.Sscrofa17.dna_sm.chromosome.X.fa.chain
+
+src/chain2rdotplot.pl --chain alignments.X.stringent/homo_sapiens/Homo_sapiens.GRCh38.dna_sm.chromosome.X.fa.vs.Sus_scrofa.Sscrofa17.dna_sm.chromosome.X.fa.chain \
+ --min_length 1K --max_gap 1K > alignments.X.stringent/homo_sapiens/Homo_sapiens.GRCh38.dna_sm.chromosome.X.fa.vs.Sus_scrofa.Sscrofa17.dna_sm.chromosome.X.fa.chain.rdotplot
+
+
+## Dark red alignments (normal settings)
+lastz
+ genomes/homo_sapiens/Homo_sapiens.GRCh38.dna_sm.chromosome.X.fa genomes/sus_scrofa/Sus_scrofa.Sscrofa17.dna_sm.chromosome.X.fa \
+ --format=axt \
+ --output=alignments.X.normal/homo_sapiens/Homo_sapiens.GRCh38.dna_sm.chromosome.X.fa.vs.Sus_scrofa.Sscrofa17.dna_sm.chromosome.X.fa.axt \
+ --rdotplot=alignments.X.normal/homo_sapiens/Homo_sapiens.GRCh38.dna_sm.chromosome.X.fa.vs.Sus_scrofa.Sscrofa17.dna_sm.chromosome.X.fa.rdotplot
+
+axtChain -linearGap=loose \
+ alignments.X.normal/homo_sapiens/Homo_sapiens.GRCh38.dna_sm.chromosome.X.fa.vs.Sus_scrofa.Sscrofa17.dna_sm.chromosome.X.fa.axt \
+ genomes/homo_sapiens/ genomes/sus_scrofa \
+ alignments.X.normal/homo_sapiens/Homo_sapiens.GRCh38.dna_sm.chromosome.X.fa.vs.Sus_scrofa.Sscrofa17.dna_sm.chromosome.X.fa.chain
+
+src/chain2rdotplot.pl --chain alignments.X.normal/homo_sapiens/Homo_sapiens.GRCh38.dna_sm.chromosome.X.fa.vs.Sus_scrofa.Sscrofa17.dna_sm.chromosome.X.fa.chain \
+ --min_length 1K --max_gap 1K > alignments.X.normal/homo_sapiens/Homo_sapiens.GRCh38.dna_sm.chromosome.X.fa.vs.Sus_scrofa.Sscrofa17.dna_sm.chromosome.X.fa.chain.rdotplot
+
+
+## Final plot
+Rscript src/oxford_plot.R --genomes genomes --alignments alignments.X.stringent/homo_sapiens --alignments2 alignments.X.normal/homo_sapiens --colour2 darkred --swap
+
+
+
+## ============================================================================
+## Using command lines instead of eHive: For X assembly comparison alignments
+## ============================================================================
+
+lastz \
+ genomes.new_vs_old/previous_assembly/Sus_scrofa.Sscrofa10.2.dna_sm.chromosome.X.fa \
+ genomes.new_vs_old/new_assembly/Sus_scrofa.Sscrofa17.dna_sm.chromosome.X.fa \
+ --notransition --step=30 --seed=match12 --exact=50 --matchcount=1000 --masking=3 --format=axt \
+ --output=alignments/previous_assembly/Sus_scrofa.Sscrofa10.2.dna_sm.chromosome.X.fa.vs.Sus_scrofa.Sscrofa17.dna_sm.chomosome.X.fa.axt \
+ --rdotplot=alignments/previous_assembly/Sus_scrofa.Sscrofa10.2.dna_sm.chromosome.X.fa.vs.Sus_scrofa.Sscrofa17.dna_sm.chromosome.X.fa.rdotplot
+
+axtChain -linearGap=loose \
+ alignments/previous_assembly/Sus_scrofa.Sscrofa10.2.dna_sm.chromosome.X.fa.vs.Sus_scrofa.Sscrofa17.dna_sm.chromosome.X.fa.axt \
+ genomes/previous_assembly/ genomes/new_assembly \
+ alignments/previous_assembly/Sus_scrofa.Sscrofa10.2.dna_sm.chromosome.X.fa.vs.Sus_scrofa.Sscrofa17.dna_sm.chromosome.X.fa.chain
+
+src/chain2rdotplot.pl \
+--chain alignments/previous_assembly/Sus_scrofa.Sscrofa10.2.dna_sm.chromosome.X.fa.vs.Sus_scrofa.Sscrofa17.dna_sm.chomosome.X.fa.chain \
+--min_length 1K --max_gap 1K > alignments/previous_assembly/Sus_scrofa.Sscrofa10.2.dna_sm.chromosome.X.fa.vs.Sus_scrofa.Sscrofa17.dna_sm.chomosome.X.fa.chain.rdotplot
+
+mkdir alignments/previous_assembly.2
+
+src/chain2rdotplot.pl \
+--chain alignments/previous_assembly/Sus_scrofa.Sscrofa10.2.dna_sm.chromosome.X.fa.vs.Sus_scrofa.Sscrofa17.dna_sm.chomosome.X.fa.chain \
+ --min_length 10K --max_gap 10K > alignments/previous_assembly.2/Sus_scrofa.Sscrofa10.2.dna_sm.chromosome.X.fa.vs.Sus_scrofa.Sscrofa17.dna_sm.chomosome.X.fa.chain.rdotplot
+
+Rscript src/oxford_plot.R --genomes genomes.new_vs_old/ --alignments alignments/previous_assembly.2/ --alignments2 alignments/previous_assembly/ --colour2 grey --pdf ~/Sus_scrofa.2.pdf --swap
