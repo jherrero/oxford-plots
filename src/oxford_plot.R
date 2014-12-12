@@ -122,18 +122,18 @@ chromosomes.1 <- grep("MT", chromosomes.1, invert=T, value=T)
 ##sorted.chromosomes.1 <- ("X");
 sorted.chromosomes.1 <- c(sort(grep("^\\d\\D*$", chromosomes.1, value=T)), sort(grep("^\\d\\d", chromosomes.1, value=T)), sort(grep("^\\D*$", chromosomes.1, value=T)));
 
-chromosomes.2 <- unique(sub(".fa(.chain)?(.\\d+[MK].\\d+[MK])?.rdotplot", "", sub(paste0(".+.fa.vs.", species.2, ".", assembly.2, ".dna_sm.chromosome."), "", files)));
+chromosomes.2 <- unique(sub(".fa(.chain)?(.\\d+[MK].\\d+[MK])?(.\\d+)?.rdotplot", "", sub(paste0(".+.fa.vs.", species.2, ".", assembly.2, ".dna_sm.chromosome."), "", files)));
 chromosomes.2 <- grep("MT", chromosomes.2, invert=T, value=T)
 ##sorted.chromosomes.2 <- ("X");
 sorted.chromosomes.2 <- c(sort(grep("^\\d\\D*$", chromosomes.2, value=T)), sort(grep("^\\d\\d", chromosomes.2, value=T)), sort(grep("^\\D*$", chromosomes.2, value=T)));
 
 ## Check we haven't missed any chromosome
 if (length(chromosomes.1) != length(sorted.chromosomes.1)) {
-    cat("Error while sorting chromsomes for", species.1);
+    cat("Error while sorting chromsomes for", species.1, assembly.1);
     quit("no", 1);
 }
 if (length(chromosomes.2) != length(sorted.chromosomes.2)) {
-    cat("Error while sorting chromosomes for", species.2, "\n");
+    cat("Error while sorting chromosomes for", species.2, assembly.2, "\n");
     cat(chromosomes.2, "\n")
     cat(sorted.chromosomes.2, "\n")
     quit("no", 1);
@@ -146,6 +146,10 @@ cat("-", species.2, assembly.2, ":", sorted.chromosomes.2, "\n");
 
 my.lengths.1 <- c(0);
 these.lengths <- data.frame(chr.lengths[tolower(paste0(species.1,".txt"))]);
+if (length(these.lengths) == 0) {
+    these.lengths <- data.frame(chr.lengths[tolower(paste0(species.1,"_",assembly.1, ".txt"))]);
+}
+
 for (chr.1 in sorted.chromosomes.1) {
     if (is.na(these.lengths[chr.1,])) {
         this.length <- these.lengths[paste0("chr",chr.1),];
@@ -159,6 +163,9 @@ max.x <- tail(my.lengths.1, n=1);
 
 my.lengths.2 <- c(0);
 these.lengths <- data.frame(chr.lengths[tolower(paste0(species.2,".txt"))]);
+if (length(these.lengths) == 0) {
+    these.lengths <- data.frame(chr.lengths[tolower(paste0(species.2,"_",assembly.2, ".txt"))]);
+}
 for (chr.2 in sorted.chromosomes.2) {
     if (is.na(these.lengths[chr.2,])) {
         this.length <- these.lengths[paste0("chr",chr.2),];
@@ -181,7 +188,10 @@ cat("Storing figure in", pdf.filename, "\n");
 pdf(pdf.filename);
 
 if (args$swap) {
-    plot(NULL, xlim=c(1,max.y), ylim=c(1,max.x), xlab=sub("_", " ", species.2), ylab=sub("_", " ", species.1), xaxt="n", yaxt="n", mgp=c(0.5,0,0), bty="n");
+    plot(NULL, xlim=c(1,max.y), ylim=c(1,max.x),
+        xlab=paste0(sub("_", " ", species.2), " (", assembly.2, ")"),
+        ylab=paste0(sub("_", " ", species.1), " (", assembly.1, ")"),
+        xaxt="n", yaxt="n", mgp=c(0.5,0,0), bty="n");
     for (l in my.lengths.1) lines(c(0,max.y), c(l, l), col="grey");
     for (l in my.lengths.2) lines(c(l,l), c(0,max.x), col="grey");
     for (i in 1:length(sorted.chromosomes.2)) {
@@ -191,7 +201,10 @@ if (args$swap) {
         text(1, sum(my.lengths.1[c(i, i+1)])/2, sorted.chromosomes.1[i], pos=2, cex=0.6)
     }
 } else {
-    plot(NULL, xlim=c(1,max.x), ylim=c(1,max.y), xlab=sub("_", " ", species.1), ylab=sub("_", " ", species.2), xaxt="n", yaxt="n", mgp=c(0.5,0,0), bty="n");
+    plot(NULL, xlim=c(1,max.x), ylim=c(1,max.y),
+        xlab=paste0(sub("_", " ", species.1), " (", assembly.1, ")"),
+        ylab=paste0(sub("_", " ", species.2), " (", assembly.2, ")"),
+        xaxt="n", yaxt="n", mgp=c(0.5,0,0), bty="n");
     for (l in my.lengths.2) lines(c(0,max.x), c(l, l), col="grey");
     for (l in my.lengths.1) lines(c(l,l), c(0,max.y), col="grey");
     for (i in 1:length(sorted.chromosomes.1)) {
@@ -204,6 +217,8 @@ if (args$swap) {
 
 all.chain.lengths.1 <- c();
 all.chain.lengths.2 <- c();
+
+# rect(0, data$Start, max.y, data$Stop, col="grey", border=NA)
 
 for (i in 1:length(sorted.chromosomes.1)) {
     
@@ -220,8 +235,10 @@ for (i in 1:length(sorted.chromosomes.1)) {
         }
         
         if (length(alignments.dir2)!=0) {
+#            filename <- paste(species.1, assembly.1, "dna_sm", "chromosome", chr.1, "fa", "vs", species.2, assembly.2, "dna_sm", "chromosome", chr.2, "fa", "chain", "rdotplot", sep=".");
             plot.chains(paste0(alignments.dir2, "/", filename), my.lengths.1, my.lengths.2, 2, user.col2);
         }
+#            filename <- paste(species.1, assembly.1, "dna_sm", "chromosome", chr.1, "fa", "vs", species.2, assembly.2, "dna_sm", "chromosome", chr.2, "fa", "chain", "2", "rdotplot", sep=".");
         these.chain.lengths <- plot.chains(paste0(alignments.dir, "/", filename), my.lengths.1, my.lengths.2, 5, user.col);
         all.chain.lengths.1 <- c(all.chain.lengths.1, these.chain.lengths[[1]]);
         all.chain.lengths.2 <- c(all.chain.lengths.2, these.chain.lengths[[2]]);
