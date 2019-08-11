@@ -1,6 +1,7 @@
 This file shows the equivalent command lines for the dotplot produced as part of the "The pig X and Y chromosomes" study 
 
-lastz and axtChain are from git://genome-source.cse.ucsc.edu/kent.git (26 Nov 2014; 646cb9f112ae913bbd5fff50346c0d7d50ce013b)
+lastz is version 1.02.00
+faToNib and axtChain are from git://genome-source.cse.ucsc.edu/kent.git (26 Nov 2014; 646cb9f112ae913bbd5fff50346c0d7d50ce013b)
 
 #################################################
 ## 1. Obtain the data
